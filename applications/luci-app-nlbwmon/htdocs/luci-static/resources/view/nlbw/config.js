@@ -7,19 +7,23 @@
 'require tools.widgets as widgets';
 
 function writePeriod(section_id, value) {
-	var interval = this.map.lookupOption('_interval', section_id)[0],
-	    period = this.map.lookupOption('_period', section_id)[0],
-	    date = this.map.lookupOption('_date', section_id)[0],
-	    days = this.map.lookupOption('_days', section_id)[0];
+	var period = this.map.lookupOption('_period', section_id)[0];
 
 	if (period.formvalue(section_id) == 'relative') {
+		var interval = this.map.lookupOption('_interval', section_id)[0];
 		uci.set('nlbwmon', section_id, 'database_interval', interval.formvalue(section_id));
 	}
-	else {
+	else if (period.formvalue(section_id) == 'absolute') {
+		var date = this.map.lookupOption('_date', section_id)[0],
+			days = this.map.lookupOption('_days', section_id)[0];
 		uci.set('nlbwmon', section_id, 'database_interval', '%s/%s'.format(
 			date.formvalue(section_id),
 			days.formvalue(section_id)
 		));
+	}
+	else {
+		var minutes = this.map.lookupOption('_minutes', section_id)[0];
+		uci.set('nlbwmon', section_id, 'database_interval', '%sm'.format(minutes.formvalue(section_id)));
 	}
 }
 
@@ -39,6 +43,16 @@ function writeNetworks(section_id, value) {
 
 function writeProtocols(section_id, value) {
 	return fs.write('/usr/share/nlbwmon/protocols', (value || '').trim().replace(/\r\n/g, '\n') + '\n');
+}
+
+function intervalType(interval) {
+	if (/^[0-9]+m$/.test(interval)) {
+		return 'minute';
+	}
+	else if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}\/[0-9]+$/.test(interval)) {
+		return 'absolute';
+	}
+	return 'relative';
 }
 
 return view.extend({
@@ -63,22 +77,18 @@ return view.extend({
 		o = s.taboption('general', form.ListValue, '_period', _('Accounting period'),
 			_('Choose "Day of month" to restart the accounting period monthly on a specific date, e.g. every 3rd. Choose "Fixed interval" to restart the accounting period exactly every N days, beginning at a given date.'));
 		o.cfgvalue = function(section_id) {
-			var value = uci.get('nlbwmon', section_id, 'database_interval'),
-			    m = /^[0-9]{4}-[0-9]{2}-[0-9]{2}\/[0-9]+$/.test(value);
-
-			return m ? 'absolute' : 'relative';
+			return intervalType(uci.get('nlbwmon', section_id, 'database_interval'));
 		};
 		o.write = writePeriod;
 		o.value('relative', _('Day of month'));
 		o.value('absolute', _('Fixed interval'));
+		o.value('minute', _('Minute interval'));
 
 		o = s.taboption('general', form.DummyValue, '_warning', _('Warning'));
 		o.default = _('Changing the accounting interval type will invalidate existing databases!<br /><strong><a href="%s">Download backup</a></strong>.').format(L.url('admin/services/nlbw/backup'));
 		o.rawhtml = true;
-		if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}\/[0-9]+$/.test(uci.get_first('nlbwmon', 'nlbwmon', 'database_interval')))
-			o.depends('_period', 'relative');
-		else
-			o.depends('_period', 'absolute');
+		var origType = intervalType(uci.get_first('nlbwmon', 'nlbwmon', 'database_interval'));
+		o.depends({_period: origType, "!reverse": true});
 
 		o = s.taboption('general', form.Value, '_interval', _('Due date'),
 			_('Day of month to restart the accounting period. Use negative values to count towards the end of month, e.g. "-5" to specify the 27th of July or the 24th of February.'));
@@ -119,6 +129,18 @@ return view.extend({
 		};
 		o.write = writePeriod;
 		o.depends('_period', 'absolute');
+
+		o = s.taboption('general', form.Value, '_minutes', _('Interval'),
+			_('Length of accounting interval in minutes.'));
+		o.rmempty = false;
+		o.cfgvalue = function(section_id) {
+			var value = uci.get('nlbwmon', section_id, 'database_interval'),
+				m = /^([0-9]+)m$/.exec(value);
+
+			return m ? m[1] : null;
+		};
+		o.write = writePeriod;
+		o.depends('_period', 'minute');
 
 		o = s.taboption('general', widgets.NetworkSelect, '_ifaces', _('Local interfaces'),
 			_('Only conntrack streams from or to any of these networks are counted.'));

@@ -245,26 +245,16 @@ return view.extend({
 		    keys = [];
 
 		for (var e, i = trafficPeriods.length - 1; e = trafficPeriods[i]; i--) {
-			var ymd1 = e.split(/-/);
-			var d1 = new Date(+ymd1[0], +ymd1[1] - 1, +ymd1[2]);
-			var ymd2, d2, pd;
 
-			if (i) {
-				ymd2 = trafficPeriods[i - 1].split(/-/);
-				d2 = new Date(+ymd2[0], +ymd2[1] - 1, +ymd2[2]);
-				d2.setDate(d2.getDate() - 1);
-				pd = e;
+			if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(e)) {
+				keys.push(e);
+				choices[e] = e;
 			}
-			else {
-				d2 = new Date();
-				pd = '-';
+			var g = e.match(/([0-9]+) \((.*)\)/);
+			if (g) {
+				keys.push(g[1]);
+				choices[g[1]] = g[2];
 			}
-
-			keys.push(pd);
-			choices[pd] = '%04d-%02d-%02d - %04d-%02d-%02d'.format(
-				d1.getFullYear(), d1.getMonth() + 1, d1.getDate(),
-				d2.getFullYear(), d2.getMonth() + 1, d2.getDate()
-			);
 		}
 
 		var dropdown = new ui.Dropdown('-', choices, { sort: keys, optional: false }).render();

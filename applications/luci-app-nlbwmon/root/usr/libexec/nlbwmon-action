@@ -43,10 +43,7 @@ case "$1" in
 					shift
 				;;
 				-t)
-					case "$2" in
-						[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) period=$2 ;;
-						*) echo "Invalid period" >&2; exit 1 ;;
-					esac
+					period=$2
 					shift
 				;;
 				-g|-o)
@@ -72,15 +69,14 @@ case "$1" in
 	;;
 
 	periods)
-		for date in $(/usr/sbin/nlbw -c list); do
-			case "$date" in
-				[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])
-					res="${res:+$res, }\"$date\""
-				;;
-			esac
-		done
-
-		printf '{ "periods": [ %s ] }' "$res"
+		echo -n '{ "periods": [ '
+		comma=' '
+		IFS=$'\n'
+    while read line; do
+      printf '%s "%s"' $comma $line
+      comma=','
+    done < <(/usr/sbin/nlbw -c list)
+		echo ' ] }'
 	;;
 
 	restore)
